@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio to Text - AssemblyAI (Dua Kolom)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: #111827;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 850px; /* Diperlebar sedikit agar tabelnya lega */
+            text-align: center;
+            border: 1px solid #1f2937;
+        }
+
+        h1 {
+            color: #ffffff;
+            margin-bottom: 5px;
+            font-size: 24px;
+        }
+
+        p.subtitle {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #10b981;
+            padding: 40px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: #1f2937;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            background-color: #374151;
+            border-color: #34d399;
+        }
+
+        .drop-zone p {
+            color: #d1d5db;
+            font-size: 16px;
+        }
+
+        .file-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #34d399;
+            font-weight: bold;
+            display: none;
+        }
+
+        button {
+            background-color: #10b981;
+            color: #ffffff;
+            border: none;
+            padding: 14px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+            font-weight: 700;
+        }
+
+        button:hover {
+            background-color: #34d399;
+        }
+
+        button:disabled {
+            background-color: #4b5563;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #34d399;
+            display: none;
+        }
+
+        .result-box {
+            margin-top: 25px;
+            text-align: left;
+        }
+
+        .result-box h3 {
+            color: #ffffff;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        /* STYLING UNTUK TABEL DUA KOLOM */
+        .transcript-container {
+            width: 100%;
+            max-height: 450px;
+            overflow-y: auto;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            background-color: #1f2937;
+            padding: 5px;
+        }
+
+        .transcript-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #f3f4f6;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .transcript-table tr {
+            border-bottom: 1px solid #2d3748;
+        }
+
+        .transcript-table tr:last-child {
+            border-bottom: none;
+        }
+
+        /* Kolom Kiri (Pembicara) */
+        .col-speaker {
+            width: 25%;
+            padding: 14px;
+            font-weight: bold;
+            color: #34d399;
+            vertical-align: top;
+            background-color: rgba(16, 185, 129, 0.05);
+            border-right: 1px solid #2d3748;
+        }
+
+        /* Kolom Kanan (Isi Omongan) */
+        .col-text {
+            width: 75%;
+            padding: 14px;
+            vertical-align: top;
+            text-align: justify;
+        }
+
+        .error-message {
+            color: #ef4444;
+            padding: 14px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Audio to Text</h1>
+    <p class="subtitle">Transkripsi Pintar + Otomatis Memisahkan Pembicara (Orang A/B)</p>
+    
+    <div class="drop-zone" id="dropZone">
+        <p>Drag & drop file MP3 kamu di sini, atau klik untuk memilih file</p>
+        <input type="file" id="fileInput" accept="audio/mp3, audio/mpeg" style="display: none;">
+        <div class="file-info" id="fileInfo"></div>
+    </div>
+
+    <button id="btnConvert" disabled>Mulai Transkrip</button>
+    <div class="loading" id="loadingStatus">Menghubungkan ke server...</div>
+
+    <div class="result-box">
+        <h3>Hasil Transkripsi Berdasarkan Pembicara:</h3>
+        <div class="transcript-container">
+            <table class="transcript-table">
+                <tbody id="transcriptBody">
+                    <tr>
+                        <td colspan="2" style="padding: 20px; text-align: center; color: #9ca3af;">
+                            Hasil percakapan terpisah dua kolom akan muncul di sini...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // API Key kamu sudah terpasang aman di sini
+    const apiKey = '0274359ec6f24f169e120b9906623bac'; 
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const btnConvert = document.getElementById('btnConvert');
+    const loadingStatus = document.getElementById('loadingStatus');
+    const transcriptBody = document.getElementById('transcriptBody');
+
+    let selectedFile = null;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+        if (!file) return;
+        selectedFile = file;
+        fileInfo.textContent = `File terpilih: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+        fileInfo.style.display = 'block';
+        btnConvert.disabled = false;
+        transcriptBody.innerHTML = `<tr><td colspan="2" style="padding: 20px; text-align: center; color: #9ca3af;">File siap diproses. Klik tombol di atas!</td></tr>`;
+    }
+
+    btnConvert.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        if (apiKey === 'MASUKKAN_API_KEY_ASSEMBLYAI_DI_SINI' || apiKey === '') {
+            alert('Kamu belum memasukkan API Key AssemblyAI!');
+            return;
+        }
+
+        btnConvert.disabled = true;
+        loadingStatus.style.display = 'block';
+        transcriptBody.innerHTML = '';
+
+        try {
+            // Langkah 1: Upload file audio
+            loadingStatus.textContent = "1. Sedang mengunggah file audio ke server...";
+            const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+                method: 'POST',
+                headers: { 'Authorization': apiKey },
+                body: selectedFile
+            });
+
+            if (!uploadResponse.ok) {
+                const errData = await uploadResponse.json();
+                throw new Error(`Gagal Upload: ${errData.error || 'Terjadi masalah saat upload berkas.'}`);
+            }
+
+            const uploadData = await uploadResponse.json();
+            const audioUrl = uploadData.upload_url;
+
+            // Langkah 2: Minta buat transkrip dual model
+            loadingStatus.textContent = "2. Memulai proses analisis dan pemisahan pembicara...";
+            const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+                method: 'POST',
+                headers: {
+                    'Authorization': apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    audio_url: audioUrl,
+                    speaker_labels: true, 
+                    language_code: 'id',
+                    speech_models: ['universal-3-pro', 'universal-2']
+                })
+            });
+
+            const transcriptData = await transcriptResponse.json();
+            
+            if (!transcriptData.id) {
+                throw new Error(`Gagal inisialisasi AI: ${transcriptData.error || 'Request ditolak oleh server.'}`);
+            }
+
+            const transcriptId = transcriptData.id;
+
+            // Langkah 3: Polling status
+            const checkStatus = setInterval(async () => {
+                loadingStatus.textContent = "3. AI sedang memproses naskah percakapan. Mohon tunggu...";
+                
+                try {
+                    const statusResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+                        headers: { 'Authorization': apiKey }
+                    });
+                    const statusData = await statusResponse.json();
+
+                    if (statusData.status === 'completed') {
+                        clearInterval(checkStatus);
+                        loadingStatus.textContent = "Selesai!";
+                        btnConvert.disabled = false;
+
+                        transcriptBody.innerHTML = ''; // bersihkan status loading di tabel
+
+                        if (statusData.utterances && statusData.utterances.length > 0) {
+                            // Inject data baris baru ke dalam tabel secara dinamis
+                            statusData.utterances.forEach(utterance => {
+                                const row = document.createElement('tr');
+                                
+                                const cellSpeaker = document.createElement('td');
+                                cellSpeaker.className = 'col-speaker';
+                                cellSpeaker.textContent = `Speaker ${utterance.speaker}`;
+                                
+                                const cellText = document.createElement('td');
+                                cellText.className = 'col-text';
+                                cellText.textContent = utterance.text;
+                                
+                                row.appendChild(cellSpeaker);
+                                row.appendChild(cellText);
+                                transcriptBody.appendChild(row);
+                            });
+                        } else {
+                            transcriptBody.innerHTML = `<tr><td colspan="2" class="col-text">${statusData.text || "Audio selesai diproses, namun gagal memisahkan pembicara."}</td></tr>`;
+                        }
+
+                    } else if (statusData.status === 'error') {
+                        clearInterval(checkStatus);
+                        transcriptBody.innerHTML = `<tr><td colspan="2" class="error-message">Error proses AI: ${statusData.error}</td></tr>`;
+                        btnConvert.disabled = false;
+                        loadingStatus.style.display = 'none';
+                    }
+                } catch (innerErr) {
+                    clearInterval(checkStatus);
+                    transcriptBody.innerHTML = `<tr><td colspan="2" class="error-message">Terjadi kesalahan saat mengecek status: ${innerErr.message}</td></tr>`;
+                    btnConvert.disabled = false;
+                }
+            }, 5000); 
+
+        } catch (error) {
+            console.error(error);
+            transcriptBody.innerHTML = `<tr><td colspan="2" class="error-message">Sistem Berhenti: ${error.message}</td></tr>`;
+            btnConvert.disabled = false;
+            loadingStatus.style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>
